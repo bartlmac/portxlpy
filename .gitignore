@@ -1,6 +1,7 @@
 # Python bytecode / cache
 __pycache__/
 *.py[cod]
+**/.pytest_cache/
 
 # Virtual environments
 .venv/
@@ -13,5 +14,5 @@ Thumbs.db
 
 # ───────── Test-Artefakte / Reports ─────────
 # JUnit-XML und HTML-Berichte unter output/tests/
-*/output/tests/*.xml
-*/output/tests/*.html
+**/output/tests/pytest-results.xml
+**/output/tests/*.html

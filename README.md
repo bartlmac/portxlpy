@@ -228,7 +228,7 @@ Pull Requests sind willkommen! Bitte beachte:
 
 ---
 
-## Appendix: Arbeiten mit der Python-Umgebung (`.venv`) und `requirements.txt`
+## Appendix 1: Arbeiten mit der Python-Umgebung (`.venv`) und `requirements.txt`
 
 ### Projekt lokal starten
 
@@ -276,6 +276,131 @@ Pull Requests sind willkommen! Bitte beachte:
 
 **Hinweis:**  
 Alle Workflows im Projekt nutzen **eine zentrale virtuelle Umgebung** und **ein gemeinsames `requirements.txt`**. Bei Problemen mit Abhängigkeiten empfiehlt sich das Löschen der `.venv` und erneutes Anlegen wie oben beschrieben.
+
+---
+
+## (WIP!) Appendix 2: 🛠️ Seminar Setup & Workflow
+
+Dieser Abschnitt erklärt Schritt für Schritt, wie **Teilnehmende** das Projekt in einer **identischen, vorkonfigurierten Umgebung** starten – egal ob lokal mit Docker + VS Code oder direkt in GitHub Codespaces. Außerdem enthält er Anweisungen für **Maintainer**, um neue Seminar‑Images zu veröffentlichen.
+
+
+### 1 · Voraussetzungen
+
+| Tool | Mindestversion | Download |
+|------|----------------|----------|
+| **Docker Desktop** (Win / Mac) oder **Docker Engine** (Linux) | ≥ 24.x | <https://docs.docker.com/get-docker/> |
+| **Visual Studio Code** | ≥ 1.90 | <https://code.visualstudio.com/> |
+| VS Code Extension **„Remote – Containers“** | aktuell | `ext install ms-vscode-remote.remote-containers` |
+
+Optional für Cloud‑Nutzung: **GitHub Codespaces** (braucht GitHub‑Team/Org‑Lizenz).
+
+---
+
+### 2 · Schnellstart (lokal)  
+*(empfohlen für Teilnehmende)*
+
+```bash
+# 1 Repository klonen
+git clone https://github.com/bartlmac/portxlpy.git
+cd portxlpy
+
+# 2 VS Code starten
+code .
+# → Pop‑up „Reopen in Container“ anklicken.
+#   VS Code zieht das vorgebaute Image ghcr.io/bartlmac/portxlpy:seminar-202507.
+#
+# 3 Smoke‑Test im VS‑Code‑Terminal (im Container!)
+pytest -q            # Ausgabe: 4 passed
+```
+
+> **Hinweis:** Beim ersten Öffnen lädt Docker ~250 MB; Folge‑Starts dauern Sekunden.
+
+---
+
+### 3 · Alternative A – Nur Container (ohne VS Code)
+
+```bash
+# Image ziehen
+docker pull ghcr.io/bartlmac/portxlpy:seminar-202507
+
+# Standard‑Run (setzt Default‑Parameter)
+docker run --rm ghcr.io/bartlmac/portxlpy:seminar-202507
+
+# Help & CLI‑Parameter anzeigen
+docker run --rm ghcr.io/bartlmac/portxlpy:seminar-202507 --help
+```
+
+---
+
+### 4 · Alternative B – GitHub Codespaces
+
+1. Öffne das Repo im Browser → grüner **„Code“**‑Button → **„Codespaces“** → **„Create codespace on branch…“**  
+2. Branch `seminar-202507` oder `main` auswählen.  
+3. Codespace startet mit **demselben Dev‑Container** – Tests laufen automatisch.
+
+---
+
+### 5 · Authentifizierung bei privaten Images
+
+Falls das GHCR‑Package *private* ist:
+
+```bash
+# Personal Access Token mit Scope `read:packages` erstellen
+echo <GH_PAT> | docker login ghcr.io -u <github‑username> --password-stdin
+```
+
+---
+
+### 6 · Workflow für Maintainer – neues Seminar veröffentlichen
+
+```bash
+# 1 Alle Tests grün? → neuen Tag setzen
+git switch main
+git pull
+git tag -a seminar-202509 -m "Release September‑Seminar"
+git push origin seminar-202509
+
+# 2 CI tut den Rest:
+#   • GitHub Action baut das Image
+#   • pushed es nach ghcr.io/bartlmac/portxlpy:seminar-202509
+#   • README/Einladungs‑Mail anpassen
+```
+
+Die Action befindet sich in `.github/workflows/build-docker.yml` und nutzt den Dockerfile aus `.devcontainer/`.
+
+---
+
+### 7 · Troubleshooting
+
+| Problem                                         | Lösung                                                                                                                                        |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **„Workspace does not exist“**                  | Compose-Volume fehlt. In `.devcontainer/docker-compose.yml` sicherstellen: `volumes: - ..:/workspace:cached` → **Rebuild Container**.         |
+| **VS Code meldet „Git not found“ im Container** | Falsches/zu altes Image. `docker rmi ghcr.io/bartlmac/portxlpy:<tag> && docker pull ghcr.io/bartlmac/portxlpy:<tag>` → **Rebuild Container**. |
+| **`ModuleNotFoundError` nach Code-Änderung**    | **F1 → Dev Containers: Rebuild Container** (baut neu, installiert Abhängigkeiten).                                                            |
+| **Container beendet sich sofort**               | ENTRYPOINT läuft durch. Mit Compose bereits gelöst; sonst beim Testen starten mit `--entrypoint /bin/bash -c "tail -f /dev/null"`.            |
+| **Auto-Port-Forward-Popup (Port 4594)**         | In `.devcontainer/devcontainer.json`: `"portsAttributes": { "4594": { "onAutoForward": "ignore" } }"`.                                        |
+| **Neues Tag wird nicht gepullt**                | Altes lokales Image blockiert. `docker rmi ghcr.io/bartlmac/portxlpy:<tag>` danach `docker pull ghcr.io/bartlmac/portxlpy:<tag>`.             |
+| **`docker` im Container nicht gefunden**        | Docker-Befehle **auf dem Host** ausführen (PowerShell/Terminal). Optional: Feature `docker-outside-of-docker` nutzen.                         |
+| **„name is already in use“**                    | Vorhandenen Container löschen/umbenennen: `docker rm -f portxlpy-seminar` oder `docker rename <alt> portxlpy-seminar`.                        |
+| **Bild belegt viel Platz**                      | Unbenötigte Images entfernen: `docker image prune -a` *(Vorsicht: löscht alle ungenutzten Images!)*                                           |
+
+
+---
+
+### 8 · Aufräumen
+
+```bash
+# Container beenden & löschen
+docker ps -a                                 # Container‑ID nachschlagen
+docker ps -a \
+  --format "table {{.Names}}\t{{.ID}}\t{{.Status}}"
+                                             # (optional) oder so aufgehübscht
+docker stop <ID>                             # Zuerst stoppen (ID oder Name, beides geht)
+docker rm <ID>                               # Löschen (dito)
+
+# Unbenutzte Images entfernen
+docker image prune -a
+```
 
 ---
 
